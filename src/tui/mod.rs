@@ -16,7 +16,7 @@ use tokio::sync::{mpsc, RwLock};
 
 use crate::app::{App, AppEvent, AppView};
 use crate::calendar::CalendarEvent;
-use crate::config::{save_config, Config};
+use crate::config::{save_config, Config, NotificationConfig};
 use crate::notification::spawn_notification_watcher;
 use views::{event_detail, help, settings, timeline};
 
@@ -40,7 +40,9 @@ async fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, config: 
     let mut app = App::new(config, event_tx.clone());
 
     let shared_events: Arc<RwLock<Vec<CalendarEvent>>> = Arc::new(RwLock::new(Vec::new()));
-    spawn_notification_watcher(event_tx.clone(), shared_events.clone());
+    let shared_notif_config: Arc<RwLock<NotificationConfig>> =
+        Arc::new(RwLock::new(app.config.notifications.clone()));
+    spawn_notification_watcher(event_tx.clone(), shared_events.clone(), shared_notif_config.clone());
 
     if app.has_any_calendar() {
         app.trigger_load();
@@ -61,6 +63,10 @@ async fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, config: 
         {
             let mut guard = shared_events.write().await;
             *guard = app.events.clone();
+        }
+        {
+            let mut guard = shared_notif_config.write().await;
+            *guard = app.config.notifications.clone();
         }
 
         terminal.draw(|frame| {

@@ -36,6 +36,23 @@ impl Default for DisplayConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationConfig {
+    #[serde(default = "default_notify_before")]
+    pub notify_before_minutes: Option<u64>,
+    #[serde(default = "default_notify_on_start")]
+    pub notify_on_start: bool,
+}
+
+fn default_notify_before() -> Option<u64> { Some(5) }
+fn default_notify_on_start() -> bool { true }
+
+impl Default for NotificationConfig {
+    fn default() -> Self {
+        Self { notify_before_minutes: Some(5), notify_on_start: true }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
@@ -44,6 +61,8 @@ pub struct Config {
     pub microsoft: MicrosoftConfig,
     #[serde(default)]
     pub display: DisplayConfig,
+    #[serde(default)]
+    pub notifications: NotificationConfig,
 }
 
 fn config_path() -> PathBuf {
