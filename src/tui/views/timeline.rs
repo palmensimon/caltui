@@ -65,7 +65,7 @@ fn format_day_label(day: NaiveDate, is_today: bool) -> String {
 }
 
 fn draw_hints(_app: &App, frame: &mut Frame, area: Rect) {
-    let hints = "[j/k] select  [enter] detail  [o] join  [b] open  [[/]] day  [t] now  [r] refresh  [s] settings  [?] help  [q] quit";
+    let hints = "[o] join  [b] open  [t] now  [r] refresh  [s] settings  [?] help";
     frame.render_widget(
         Paragraph::new(hints).style(Style::default().fg(Color::DarkGray)),
         area,
