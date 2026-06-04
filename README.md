@@ -16,7 +16,7 @@ A terminal calendar that combines Google Calendar and Microsoft/Outlook in one t
 - A notification daemon (Linux: dunst, mako, or any libnotify-compatible daemon)
 
 ```sh
-cargo install --git https://github.com/palmensimon/caltui
+cargo install --git https://github.com/palmensimon/caltui.git
 ```
 
 The `caltui` binary will be placed in `~/.cargo/bin/`. Make sure that is on your `$PATH`.
