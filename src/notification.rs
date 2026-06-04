@@ -25,15 +25,15 @@ pub fn spawn_notification_watcher(
             let guard = events.read().await;
 
             for event in guard.iter() {
-                let mins = (event.start - now).num_minutes();
+                let secs = (event.start - now).num_seconds();
 
                 if let Some(before) = config.notify_before_minutes {
                     let key = format!("before:{}", event.id);
-                    if mins >= 0 && mins <= before as i64 && !notified_before.contains(&key) {
+                    if secs >= 0 && secs <= before as i64 * 60 && !notified_before.contains(&key) {
                         notified_before.insert(key);
                         notify_rust::Notification::new()
                             .summary("caltui")
-                            .body(&format!("In {} min: {}", mins, event.title))
+                            .body(&format!("In {} min: {}", before, event.title))
                             .timeout(notify_rust::Timeout::Milliseconds(8000))
                             .show()
                             .ok();
@@ -42,7 +42,7 @@ pub fn spawn_notification_watcher(
 
                 if config.notify_on_start {
                     let key = format!("start:{}", event.id);
-                    if (0..=1).contains(&mins) && !notified_start.contains(&key) {
+                    if (0..60).contains(&secs) && !notified_start.contains(&key) {
                         notified_start.insert(key);
                         notify_rust::Notification::new()
                             .summary("caltui")
