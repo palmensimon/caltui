@@ -121,19 +121,19 @@ fn draw_timeline_body(app: &App, frame: &mut Frame, area: Rect, scroll_minutes: 
             let y_screen = y_virtual - (scroll_minutes as f32 * ppm) as i32;
             if y_screen >= 0 && y_screen < area.height as i32 {
                 let row = area.y + y_screen as u16;
-                let time_str = format!(" {:02}:{:02} ", now.hour(), now.minute());
+
+                // Show current time in red in the time column — always visible even under events.
+                frame.render_widget(
+                    Paragraph::new(format!("{:02}:{:02} ", now.hour(), now.minute()))
+                        .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                    Rect::new(area.x, row, TIME_COL_W, 1),
+                );
+
+                // Red line in the event area (may be obscured by overlapping event blocks).
                 let line_x = area.x + TIME_COL_W;
                 let line_w = area.width.saturating_sub(TIME_COL_W) as usize;
-                let fill = line_w.saturating_sub(time_str.len());
-                let half = fill / 2;
-                let marker = format!(
-                    "{}{}{}",
-                    "─".repeat(half),
-                    time_str,
-                    "─".repeat(fill - half)
-                );
                 frame.render_widget(
-                    Paragraph::new(marker)
+                    Paragraph::new("─".repeat(line_w))
                         .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
                     Rect::new(line_x, row, area.width.saturating_sub(TIME_COL_W), 1),
                 );
