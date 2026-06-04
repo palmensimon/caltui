@@ -7,7 +7,6 @@ A terminal calendar that combines Google Calendar and Microsoft/Outlook in one t
 - Unified day timeline for Google and Microsoft/Outlook events
 - Join Teams and Google Meet meetings directly from the terminal
 - Desktop notifications before meetings start
-- Strikethrough for cancelled events
 
 ## Install
 
@@ -17,7 +16,7 @@ A terminal calendar that combines Google Calendar and Microsoft/Outlook in one t
 - A notification daemon (Linux: dunst, mako, or any libnotify-compatible daemon)
 
 ```sh
-cargo install --git https://github.com/simonpalm/caltui
+cargo install --git https://github.com/palmensimon/caltui
 ```
 
 The `caltui` binary will be placed in `~/.cargo/bin/`. Make sure that is on your `$PATH`.
