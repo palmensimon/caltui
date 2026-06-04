@@ -178,10 +178,10 @@ impl App {
         let today = Local::now().date_naive();
         if self.selected_day != today {
             self.selected_day = today;
-            self.selected_event_idx = 0;
             self.events.clear();
             self.trigger_load();
         }
+        self.selected_event_idx = 0;
         self.scroll_to_now = true;
     }
 }
