@@ -160,6 +160,10 @@ async fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, config: 
                                     settings::handle_key(&mut app, &mut settings_state, key);
                                 }
                             }
+                            if app.scroll_to_now {
+                                timeline_scroll = default_timeline_scroll(&app);
+                                app.scroll_to_now = false;
+                            }
                         }
                         Ok(Event::Mouse(mouse)) => {
                             match mouse.kind {
