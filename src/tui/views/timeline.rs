@@ -455,18 +455,18 @@ pub fn handle_key(
                         let teams_uri = url
                             .replace("https://teams.microsoft.com", "msteams:")
                             .replace("http://teams.microsoft.com", "msteams:");
-                        if open::that(&teams_uri).is_err() {
-                            let _ = open::that(&url);
+                        if open::that_detached(&teams_uri).is_err() {
+                            let _ = open::that_detached(&url);
                         }
                     } else {
-                        let _ = open::that(&url);
+                        let _ = open::that_detached(&url);
                     }
                 }
             }
         }
         KeyCode::Char('b') => {
             if let Some(url) = app.selected_event().and_then(|e| e.event_url.clone()) {
-                let _ = open::that(url);
+                let _ = open::that_detached(url);
             }
         }
         KeyCode::Char('r') => app.trigger_load(),

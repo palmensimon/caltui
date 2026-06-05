@@ -198,7 +198,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent, detail_scroll: &mut u16, _timeli
         }
         KeyCode::Char('b') => {
             if let Some(url) = &event.event_url {
-                let _ = open::that(url);
+                let _ = open::that_detached(url);
             }
         }
         _ => {}
@@ -211,11 +211,11 @@ fn join_meeting(event: &CalendarEvent) {
         let teams_uri = url
             .replace("https://teams.microsoft.com", "msteams:")
             .replace("http://teams.microsoft.com", "msteams:");
-        if open::that(&teams_uri).is_err() {
-            let _ = open::that(url);
+        if open::that_detached(&teams_uri).is_err() {
+            let _ = open::that_detached(url);
         }
     } else {
-        let _ = open::that(url);
+        let _ = open::that_detached(url);
     }
 }
 

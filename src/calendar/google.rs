@@ -139,7 +139,7 @@ impl GoogleClient {
         let redirect_uri = format!("http://localhost:{port}");
 
         let auth_url = build_auth_url(&self.config.google.client_id, &redirect_uri);
-        open::that(&auth_url).ok();
+        open::that_detached(&auth_url).ok();
 
         // Wait up to 2 minutes for the browser callback.
         let (mut stream, _) = tokio::time::timeout(
