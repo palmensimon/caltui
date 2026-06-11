@@ -9,7 +9,7 @@ A terminal UI calendar written in Rust. Combines Google Calendar (OAuth) and Mic
 - **reqwest 0.12** (rustls) — HTTP
 - **chrono** — date/time (always import `Timelike` when using `.hour()` / `.minute()`)
 - **icalendar** — ICS parsing
-- **notify-rust 4** — desktop notifications
+- **notify-rust 4** — desktop notifications (Linux/Windows only; macOS uses `osascript` because notify-rust's NSUserNotification backend fails silently for unbundled CLI binaries)
 - **tui-textarea 0.7** — editable text fields in settings
 - **open 5** — open URLs in browser
 - **dirs 5**, **toml 0.8**, **anyhow**, **serde_json**
@@ -21,7 +21,7 @@ A terminal UI calendar written in Rust. Combines Google Calendar (OAuth) and Mic
 | `src/main.rs` | Entry point, tokio runtime setup |
 | `src/app.rs` | `App` state, `AppEvent` enum, day navigation, client orchestration |
 | `src/config.rs` | `Config` struct, `~/.config/caltui/config.toml` read/write |
-| `src/notification.rs` | Background watcher, fires notify-rust 5 min before events |
+| `src/notification.rs` | Background watcher + `send()` helper (osascript on macOS, notify-rust elsewhere) |
 | `src/calendar/mod.rs` | `CalendarEvent`, `CalendarSource`, `ResponseStatus`, `extract_meeting_url()` |
 | `src/calendar/google.rs` | `GoogleClient` — OAuth2 PKCE + Calendar API v3 |
 | `src/calendar/ics.rs` | `IcsClient` — HTTP fetch + icalendar parse |
@@ -78,7 +78,7 @@ A terminal UI calendar written in Rust. Combines Google Calendar (OAuth) and Mic
 ## Config file location
 `~/.config/caltui/config.toml`
 
-Fields: `google.client_id`, `google.client_secret`, `google.refresh_token`, `google.vdir_path`, `google.ics_url`, `microsoft.ics_url`, `display.start_hour` (default 8), `display.end_hour` (default 18).
+Fields: `google.client_id`, `google.client_secret`, `google.refresh_token`, `google.vdir_path`, `google.ics_url`, `microsoft.ics_url`, `display.start_hour` (default 8), `display.end_hour` (default 18), `notifications.notify_before_minutes` (default 5, empty = off), `notifications.notify_on_start` (default true).
 
 ## Build / run
 ```

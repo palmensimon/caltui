@@ -171,7 +171,7 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
         layout[9],
     );
     render_field(frame, state, F_NOTIFY_BEFORE, "4. Minutes before meeting (blank = off)", false, layout[10]);
-    render_toggle(frame, state, "5. Notify on meeting start", layout[11]);
+    render_toggle(frame, state, NAV_NOTIFY_ON_START, state.notify_on_start, "5. Notify on meeting start", layout[11]);
 
     if let Some(err) = &app.error {
         frame.render_widget(
@@ -229,8 +229,8 @@ fn render_field(
     }
 }
 
-fn render_toggle(frame: &mut Frame, state: &SettingsState, label: &str, area: Rect) {
-    let is_active = state.active == NAV_NOTIFY_ON_START;
+fn render_toggle(frame: &mut Frame, state: &SettingsState, nav_idx: usize, value: bool, label: &str, area: Rect) {
+    let is_active = state.active == nav_idx;
     let border_color = if is_active { Color::Cyan } else { Color::DarkGray };
     let block = Block::default()
         .title(format!(" {label} "))
@@ -238,7 +238,7 @@ fn render_toggle(frame: &mut Frame, state: &SettingsState, label: &str, area: Re
         .borders(Borders::ALL)
         .border_style(Style::default().fg(border_color));
 
-    let (text, color) = if state.notify_on_start {
+    let (text, color) = if value {
         ("● On", Color::Green)
     } else {
         ("○ Off", Color::DarkGray)
@@ -383,12 +383,10 @@ pub fn handle_key(app: &mut App, state: &mut SettingsState, key: KeyEvent) {
             start_google_auth(app, state);
         }
         KeyCode::Char('n') => {
-            notify_rust::Notification::new()
-                .summary("caltui — test notification")
-                .body("Notifications are working correctly")
-                .timeout(notify_rust::Timeout::Milliseconds(4000))
-                .show()
-                .ok();
+            crate::notification::send(
+                "caltui — test notification",
+                "Notifications are working correctly",
+            );
             app.status_msg = Some("Test notification sent".to_string());
         }
         _ => {}

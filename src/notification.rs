@@ -8,6 +8,38 @@ use crate::app::AppEvent;
 use crate::calendar::CalendarEvent;
 use crate::config::NotificationConfig;
 
+/// Show a desktop notification.
+///
+/// On macOS, notify-rust's NSUserNotification backend silently fails for
+/// unbundled CLI binaries on recent macOS versions, so we go through
+/// osascript instead. Title/body are passed as argv so no escaping is needed.
+pub fn send(summary: &str, body: &str) {
+    #[cfg(target_os = "macos")]
+    {
+        let script = r#"on run argv
+    display notification (item 2 of argv) with title (item 1 of argv)
+end run"#;
+        let _ = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .arg(summary)
+            .arg(body)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        notify_rust::Notification::new()
+            .summary(summary)
+            .body(body)
+            .timeout(notify_rust::Timeout::Milliseconds(8000))
+            .show()
+            .ok();
+    }
+}
+
 pub fn spawn_notification_watcher(
     tx: mpsc::Sender<AppEvent>,
     events: Arc<RwLock<Vec<CalendarEvent>>>,
@@ -31,12 +63,7 @@ pub fn spawn_notification_watcher(
                     let key = format!("before:{}", event.id);
                     if secs >= 0 && secs <= before as i64 * 60 && !notified_before.contains(&key) {
                         notified_before.insert(key);
-                        notify_rust::Notification::new()
-                            .summary("caltui")
-                            .body(&format!("In {} min: {}", before, event.title))
-                            .timeout(notify_rust::Timeout::Milliseconds(8000))
-                            .show()
-                            .ok();
+                        send("caltui", &format!("In {} min: {}", before, event.title));
                     }
                 }
 
@@ -44,12 +71,7 @@ pub fn spawn_notification_watcher(
                     let key = format!("start:{}", event.id);
                     if (0..60).contains(&secs) && !notified_start.contains(&key) {
                         notified_start.insert(key);
-                        notify_rust::Notification::new()
-                            .summary("caltui")
-                            .body(&format!("Starting now: {}", event.title))
-                            .timeout(notify_rust::Timeout::Milliseconds(8000))
-                            .show()
-                            .ok();
+                        send("caltui", &format!("Starting now: {}", event.title));
                     }
                 }
             }

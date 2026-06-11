@@ -14,6 +14,7 @@ A terminal calendar that combines Google Calendar and Microsoft/Outlook in one t
 
 - [Rust](https://rustup.rs) (stable, 1.75+)
 - A notification daemon (Linux: dunst, mako, or any libnotify-compatible daemon)
+- On macOS, notifications are delivered via `osascript` — the first one triggers a permission prompt to allow notifications from Script Editor; accept it
 
 ```sh
 cargo install --git https://github.com/palmensimon/caltui.git
