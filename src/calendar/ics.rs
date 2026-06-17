@@ -22,6 +22,8 @@ impl IcsClient {
             .send()
             .await
             .context("ICS fetch failed")?
+            .error_for_status()
+            .context("ICS URL returned an error (URL may have expired or changed)")?
             .text()
             .await
             .context("ICS read failed")?;
