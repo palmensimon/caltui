@@ -2,7 +2,7 @@ use std::sync::Arc;
 use chrono::{Local, NaiveDate};
 use tokio::sync::mpsc;
 
-use crate::calendar::CalendarEvent;
+use crate::calendar::{CalendarEvent, ResponseStatus};
 use crate::calendar::google::GoogleClient;
 use crate::calendar::ics::IcsClient;
 use crate::calendar::vdir::VdirClient;
@@ -20,6 +20,7 @@ pub enum AppView {
 pub enum AppEvent {
     EventsLoaded(Vec<CalendarEvent>),
     AuthCompleted(String), // refresh_token
+    RsvpUpdated { event_id: String, status: ResponseStatus },
     Tick,
     Error(String),
 }
@@ -83,6 +84,21 @@ impl App {
                 self.selected_event_idx =
                     self.selected_event_idx.min(self.events.len().saturating_sub(1));
             }
+            AppEvent::RsvpUpdated { event_id, status } => {
+                self.status_msg = Some(format!("Response sent: {}", status.display()));
+                let detail = match &mut self.view {
+                    AppView::EventDetail { event } => Some(event.as_mut()),
+                    _ => None,
+                };
+                for ev in self.events.iter_mut().chain(detail) {
+                    if ev.id == event_id {
+                        ev.response_status = status.clone();
+                        for att in ev.attendees.iter_mut().filter(|a| a.is_self) {
+                            att.response = status.clone();
+                        }
+                    }
+                }
+            }
             AppEvent::AuthCompleted(_) | AppEvent::Tick => {}
             AppEvent::Error(e) => self.error = Some(e),
         }
@@ -133,6 +149,38 @@ impl App {
                 let _ = tx.send(AppEvent::Error(errors.join("; "))).await;
             }
             let _ = tx.send(AppEvent::EventsLoaded(all)).await;
+        });
+    }
+
+    /// Sends an RSVP for a Google event. Outlook events come from a read-only ICS feed,
+    /// so those can only be answered in the browser.
+    pub fn respond(&mut self, event: &CalendarEvent, status: ResponseStatus) {
+        if event.source != CalendarSource::Google {
+            self.status_msg = Some("Outlook events can't be answered here — press b to respond in the browser".to_string());
+            return;
+        }
+        let Some(client) = self.google_client.clone() else {
+            self.status_msg = Some("Responding needs Google sign-in — press g in settings".to_string());
+            return;
+        };
+        if !event.attendees.iter().any(|a| a.is_self) {
+            self.status_msg = Some("No invitation to respond to".to_string());
+            return;
+        }
+        if event.response_status == status {
+            self.status_msg = Some(format!("Already {}", status.display()));
+            return;
+        }
+
+        self.status_msg = Some("Sending response…".to_string());
+        let tx = self.event_tx.clone();
+        let event_id = event.id.clone();
+        tokio::spawn(async move {
+            let msg = match client.respond(&event_id, &status).await {
+                Ok(()) => AppEvent::RsvpUpdated { event_id, status },
+                Err(e) => AppEvent::Error(format!("Google: {e}")),
+            };
+            let _ = tx.send(msg).await;
         });
     }
 

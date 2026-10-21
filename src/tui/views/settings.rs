@@ -335,7 +335,8 @@ fn guide_lines() -> Vec<Line<'static>> {
         blank(),
         s("  Responding to invitations", Color::Yellow),
         blank(),
-        note("In event detail, press [b] to open the event in your browser and RSVP there."),
+        note("Google: in event detail, press [a] accept, [d] decline or [m] maybe."),
+        note("Outlook: press [b] to open the event in your browser and RSVP there."),
         blank(),
     ]
 }

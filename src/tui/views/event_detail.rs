@@ -11,7 +11,7 @@ use crate::app::{App, AppView};
 use crate::calendar::{CalendarEvent, CalendarSource, ResponseStatus};
 use super::timeline::source_color;
 
-pub fn draw(_app: &App, event: &CalendarEvent, frame: &mut Frame, area: Rect, scroll: u16) {
+pub fn draw(app: &App, event: &CalendarEvent, frame: &mut Frame, area: Rect, scroll: u16) {
     let chunks = Layout::vertical([
         Constraint::Length(1),
         Constraint::Min(0),
@@ -21,7 +21,7 @@ pub fn draw(_app: &App, event: &CalendarEvent, frame: &mut Frame, area: Rect, sc
 
     draw_header(event, frame, chunks[0]);
     draw_body(event, frame, chunks[1], scroll);
-    draw_hints(event, frame, chunks[2]);
+    draw_hints(app, event, frame, chunks[2]);
 }
 
 fn draw_header(event: &CalendarEvent, frame: &mut Frame, area: Rect) {
@@ -156,7 +156,16 @@ fn draw_body(event: &CalendarEvent, frame: &mut Frame, area: Rect, scroll: u16) 
     );
 }
 
-fn draw_hints(event: &CalendarEvent, frame: &mut Frame, area: Rect) {
+fn draw_hints(app: &App, event: &CalendarEvent, frame: &mut Frame, area: Rect) {
+    if let Some(err) = &app.error {
+        frame.render_widget(Paragraph::new(err.as_str()).style(Style::default().fg(Color::Red)), area);
+        return;
+    }
+    if let Some(msg) = &app.status_msg {
+        frame.render_widget(Paragraph::new(msg.as_str()).style(Style::default().fg(Color::Yellow)), area);
+        return;
+    }
+
     let mut parts = vec!["[esc] back".to_string()];
     if event.meeting_url.is_some() {
         parts.push("[o] join meeting".to_string());
@@ -168,6 +177,9 @@ fn draw_hints(event: &CalendarEvent, frame: &mut Frame, area: Rect) {
             "[b] open event in browser"
         };
         parts.push(label.to_string());
+    }
+    if event.source == CalendarSource::Google && event.attendees.iter().any(|a| a.is_self) {
+        parts.push("[a/d/m] accept/decline/maybe".to_string());
     }
     parts.push("[↑/↓] scroll".to_string());
 
@@ -201,6 +213,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent, detail_scroll: &mut u16, _timeli
                 let _ = open::that_detached(url);
             }
         }
+        KeyCode::Char('a') => app.respond(&event, ResponseStatus::Accepted),
+        KeyCode::Char('d') => app.respond(&event, ResponseStatus::Declined),
+        KeyCode::Char('m') => app.respond(&event, ResponseStatus::Tentative),
         _ => {}
     }
 }

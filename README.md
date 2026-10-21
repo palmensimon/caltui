@@ -6,6 +6,7 @@ A terminal calendar that combines Google Calendar and Microsoft/Outlook in one t
 
 - Unified day timeline for Google and Microsoft/Outlook events
 - Join Teams and Google Meet meetings directly from the terminal
+- Accept, decline or tentatively accept Google invitations (Outlook invitations open in the browser)
 - Desktop notifications before meetings start
 
 ## Install

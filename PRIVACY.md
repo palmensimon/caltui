@@ -6,7 +6,7 @@ caltui is an open-source terminal calendar that runs entirely on your own comput
 
 ## Data caltui accesses
 
-- **Google Calendar (read-only).** With your permission, caltui requests the `https://www.googleapis.com/auth/calendar.readonly` scope and reads events from your primary calendar: titles, times, descriptions, locations, organizers, attendees and meeting links. It cannot create, change or delete anything in your Google account.
+- **Google Calendar.** With your permission, caltui requests the `https://www.googleapis.com/auth/calendar.events` scope. It reads events from your primary calendar: titles, times, descriptions, locations, organizers, attendees and meeting links. The only change it ever makes is setting your own response (accept, decline or maybe) on an invitation, and only when you press the key to do so. It never creates or deletes events and never edits other details.
 - **Calendar feeds you configure.** If you add an ICS URL (for example an Outlook published calendar), caltui downloads that feed. If you configure a local calendar folder, caltui reads the `.ics` files in it.
 
 ## How the data is used

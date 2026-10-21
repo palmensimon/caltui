@@ -79,7 +79,8 @@ fn detail_help() -> Vec<Line<'static>> {
         Line::from(""),
         section("Actions"),
         key_line("o", "Join meeting (Teams app or browser)"),
-        key_line("b", "Open event in browser (to RSVP)"),
+        key_line("a / d / m", "Accept / decline / maybe (Google)"),
+        key_line("b", "Open event in browser (RSVP for Outlook)"),
         key_line("?", "Toggle this help"),
     ]
 }

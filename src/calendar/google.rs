@@ -101,9 +101,7 @@ impl GoogleClient {
             .json()
             .await?;
 
-        if resp["error"].is_object() {
-            anyhow::bail!("Calendar API error: {}", resp["error"]["message"].as_str().unwrap_or("unknown"));
-        }
+        check_api_error(&resp)?;
 
         let mut events = Vec::new();
         for item in resp["items"].as_array().into_iter().flatten() {
@@ -136,6 +134,39 @@ impl GoogleClient {
 
         events.sort_by_key(|e| e.start);
         Ok(events)
+    }
+
+    /// Sets the user's own RSVP on an event. Only the attendee entry marked `self`
+    /// is changed; the organizer sees the new status in their calendar.
+    pub async fn respond(&self, event_id: &str, status: &ResponseStatus) -> Result<()> {
+        let token = self.access_token().await?;
+        let url = format!(
+            "https://www.googleapis.com/calendar/v3/calendars/primary/events/{}",
+            percent_encode(event_id)
+        );
+
+        let event: serde_json::Value =
+            self.http.get(&url).bearer_auth(&token).send().await?.json().await?;
+        check_api_error(&event)?;
+
+        // PATCH replaces the whole attendees list, so send it back with only our entry changed.
+        let mut attendees = event["attendees"].as_array().cloned().unwrap_or_default();
+        let me = attendees
+            .iter_mut()
+            .find(|a| a["self"].as_bool().unwrap_or(false))
+            .ok_or_else(|| anyhow::anyhow!("you're not on the guest list for this event"))?;
+        me["responseStatus"] = serde_json::Value::from(rsvp_to_str(status));
+
+        let resp: serde_json::Value = self
+            .http
+            .patch(&url)
+            .bearer_auth(&token)
+            .json(&serde_json::json!({ "attendees": attendees }))
+            .send()
+            .await?
+            .json()
+            .await?;
+        check_api_error(&resp)
     }
 
     /// Opens a browser OAuth flow and returns the refresh token.
@@ -201,12 +232,24 @@ impl GoogleClient {
     }
 }
 
+fn check_api_error(resp: &serde_json::Value) -> Result<()> {
+    if !resp["error"].is_object() {
+        return Ok(());
+    }
+    let msg = resp["error"]["message"].as_str().unwrap_or("unknown");
+    if msg.contains("insufficient authentication scopes") {
+        // Tokens issued before RSVP support only have the read-only scope.
+        anyhow::bail!("caltui needs new permissions — press g in settings to sign in to Google again");
+    }
+    anyhow::bail!("Calendar API error: {msg}")
+}
+
 fn build_auth_url(client_id: &str, redirect_uri: &str) -> String {
     let params = [
         ("client_id", client_id),
         ("redirect_uri", redirect_uri),
         ("response_type", "code"),
-        ("scope", "https://www.googleapis.com/auth/calendar.readonly"),
+        ("scope", "https://www.googleapis.com/auth/calendar.events"),
         ("access_type", "offline"),
         ("prompt", "consent"),
     ];
@@ -318,6 +361,15 @@ fn parse_attendees(attendees: &serde_json::Value) -> Vec<Attendee> {
             is_self: att["self"].as_bool().unwrap_or(false),
         })
         .collect()
+}
+
+fn rsvp_to_str(status: &ResponseStatus) -> &'static str {
+    match status {
+        ResponseStatus::Accepted => "accepted",
+        ResponseStatus::Declined => "declined",
+        ResponseStatus::Tentative => "tentative",
+        ResponseStatus::NeedsAction => "needsAction",
+    }
 }
 
 fn rsvp_from_str(s: &str) -> ResponseStatus {

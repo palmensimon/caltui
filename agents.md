@@ -57,6 +57,11 @@ A terminal UI calendar written in Rust. Combines Google Calendar (OAuth) and Mic
 - `join_meeting()` in `event_detail.rs` tries `msteams:` deep link first for Teams URLs, falls back to browser.
 - `extract_teams_info()` in `event_detail.rs` parses "Meeting ID:" and "Passcode:" lines from description for display.
 
+### RSVP
+- Event detail `a` / `d` / `m` → `App::respond()` → `GoogleClient::respond()`, which GETs the event and PATCHes the attendees list with the `self` entry changed. Result arrives as `AppEvent::RsvpUpdated`, which updates both `app.events` and the open detail view.
+- Google only: OAuth scope is `calendar.events`. Tokens from before RSVP support have `calendar.readonly` and get a "sign in again" error. Outlook is a read-only ICS feed, so RSVP there goes through `b` (browser).
+- Event detail's bottom line shows `app.error` / `app.status_msg` in place of the key hints while set.
+
 ### Keybinds (timeline)
 | Key | Action |
 |-----|--------|
