@@ -33,7 +33,8 @@ Config is stored at `~/.config/caltui/config.toml`.
 1. Create a project at [console.cloud.google.com](https://console.cloud.google.com)
 2. Enable the **Google Calendar API**
 3. Create OAuth credentials → Desktop app → copy Client ID and Client Secret
-4. Paste them into the Settings screen and press `g` to sign in
+4. On the OAuth consent screen (Audience page), click **Publish app**. While the app is in "Testing" status, Google expires refresh tokens after 7 days and you'll have to sign in again every week. You don't need verification for personal use; you'll just click through an "unverified app" warning when you sign in.
+5. Paste them into the Settings screen and press `g` to sign in
 
 ### Microsoft / Outlook
 

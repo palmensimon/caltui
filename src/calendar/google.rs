@@ -51,7 +51,16 @@ impl GoogleClient {
             .await?;
 
         if let Some(err) = resp["error"].as_str() {
-            anyhow::bail!("token refresh failed: {}", err);
+            let desc = resp["error_description"].as_str().unwrap_or("");
+            if err == "invalid_grant" {
+                // Google's wording ("expired or revoked") doesn't say why. With a consent
+                // screen in "Testing" status, refresh tokens die after 7 days.
+                anyhow::bail!(
+                    "sign-in expired ({desc}) — press g in settings to sign in again; \
+                     if this recurs weekly, publish the OAuth consent screen to \"In production\""
+                );
+            }
+            anyhow::bail!("token refresh failed: {err} — {desc}");
         }
 
         let access_token = resp["access_token"]
