@@ -18,8 +18,9 @@ A terminal UI calendar written in Rust. Combines Google Calendar (OAuth) and Mic
 
 | Path | Responsibility |
 |------|---------------|
-| `src/main.rs` | Entry point, tokio runtime setup |
-| `src/app.rs` | `App` state, `AppEvent` enum, day navigation, client orchestration |
+| `src/main.rs` | Entry point, arg dispatch (no args → TUI, `next [--json]` → CLI) |
+| `src/cli.rs` | `caltui next` — next upcoming meeting as text or JSON |
+| `src/app.rs` | `App` state, `AppEvent` enum, day navigation, `build_clients()` + `fetch_events()` (shared with the CLI) |
 | `src/config.rs` | `Config` struct, `~/.config/caltui/config.toml` read/write |
 | `src/notification.rs` | Background watcher + `send()` helper (osascript on macOS, notify-rust elsewhere) |
 | `src/calendar/mod.rs` | `CalendarEvent`, `CalendarSource`, `ResponseStatus`, `extract_meeting_url()` |

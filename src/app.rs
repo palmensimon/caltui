@@ -118,33 +118,7 @@ impl App {
         let ms_ics = self.ms_ics.clone();
 
         tokio::spawn(async move {
-            let mut all: Vec<CalendarEvent> = Vec::new();
-            let mut errors: Vec<String> = Vec::new();
-
-            if let Some(g) = google_client {
-                match g.list_events(day).await {
-                    Ok(evs) => all.extend(evs),
-                    Err(e) => errors.push(format!("Google: {e}")),
-                }
-            } else if let Some(g) = google_vdir {
-                match g.list_events(day).await {
-                    Ok(evs) => all.extend(evs),
-                    Err(e) => errors.push(format!("Google (vdir): {e}")),
-                }
-            } else if let Some(g) = google_ics {
-                match g.list_events(day).await {
-                    Ok(evs) => all.extend(evs),
-                    Err(e) => errors.push(format!("Google: {e}")),
-                }
-            }
-
-            if let Some(m) = ms_ics {
-                match m.list_events(day).await {
-                    Ok(evs) => all.extend(evs),
-                    Err(e) => errors.push(format!("Microsoft: {e}")),
-                }
-            }
-
+            let (all, errors) = fetch_events(day, google_client, google_vdir, google_ics, ms_ics).await;
             if !errors.is_empty() {
                 let _ = tx.send(AppEvent::Error(errors.join("; "))).await;
             }
@@ -234,7 +208,46 @@ impl App {
     }
 }
 
-fn build_clients(
+/// Fetches one day's events from every configured source. Returns the events
+/// that loaded plus one message per source that failed.
+pub async fn fetch_events(
+    day: NaiveDate,
+    google_client: Option<Arc<GoogleClient>>,
+    google_vdir: Option<Arc<VdirClient>>,
+    google_ics: Option<Arc<IcsClient>>,
+    ms_ics: Option<Arc<IcsClient>>,
+) -> (Vec<CalendarEvent>, Vec<String>) {
+    let mut all: Vec<CalendarEvent> = Vec::new();
+    let mut errors: Vec<String> = Vec::new();
+
+    if let Some(g) = google_client {
+        match g.list_events(day).await {
+            Ok(evs) => all.extend(evs),
+            Err(e) => errors.push(format!("Google: {e}")),
+        }
+    } else if let Some(g) = google_vdir {
+        match g.list_events(day).await {
+            Ok(evs) => all.extend(evs),
+            Err(e) => errors.push(format!("Google (vdir): {e}")),
+        }
+    } else if let Some(g) = google_ics {
+        match g.list_events(day).await {
+            Ok(evs) => all.extend(evs),
+            Err(e) => errors.push(format!("Google: {e}")),
+        }
+    }
+
+    if let Some(m) = ms_ics {
+        match m.list_events(day).await {
+            Ok(evs) => all.extend(evs),
+            Err(e) => errors.push(format!("Microsoft: {e}")),
+        }
+    }
+
+    (all, errors)
+}
+
+pub fn build_clients(
     config: Arc<Config>,
 ) -> (
     Option<Arc<GoogleClient>>,
