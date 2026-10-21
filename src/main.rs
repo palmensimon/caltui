@@ -17,6 +17,7 @@ async fn main() -> Result<()> {
         [] => tui::run_tui(config).await,
         ["next"] => cli::run_next(config, false).await,
         ["next", "--json"] | ["--json", "next"] => cli::run_next(config, true).await,
+        ["update"] => cli::run_update(),
         ["-h" | "--help" | "help"] => {
             println!("{}", cli::USAGE);
             Ok(())

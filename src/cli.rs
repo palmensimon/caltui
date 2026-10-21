@@ -7,6 +7,9 @@ use crate::app::{build_clients, fetch_events};
 use crate::calendar::{CalendarEvent, ResponseStatus};
 use crate::config::Config;
 
+/// Where `caltui update` installs from — same source as the README install step.
+const REPO_URL: &str = "https://github.com/palmensimon/caltui.git";
+
 /// How many days ahead `caltui next` looks before giving up.
 const LOOKAHEAD_DAYS: i64 = 7;
 
@@ -15,6 +18,7 @@ Usage:
   caltui               Open the calendar TUI
   caltui next          Print the next upcoming meeting
   caltui next --json   Print the next upcoming meeting as JSON (null if none)
+  caltui update        Update caltui to the latest version from GitHub
   caltui --help        Show this help";
 
 #[derive(Serialize)]
@@ -99,4 +103,23 @@ fn format_next(event: &CalendarEvent, now: chrono::DateTime<Local>) -> String {
         event.start.format("%a %H:%M").to_string()
     };
     format!("{when} {}", event.title)
+}
+
+/// `caltui update`. Reinstalls from the git repo via `cargo install`, which
+/// rebuilds only when the remote has new commits.
+pub fn run_update() -> Result<()> {
+    println!("Updating caltui from {REPO_URL}");
+    let status = std::process::Command::new("cargo")
+        .args(["install", "--locked", "--git", REPO_URL])
+        .status()
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => anyhow::anyhow!(
+                "cargo not found — install Rust from https://rustup.rs to update caltui"
+            ),
+            _ => anyhow::anyhow!("failed to run cargo: {e}"),
+        })?;
+    if !status.success() {
+        anyhow::bail!("cargo install failed ({status})");
+    }
+    Ok(())
 }

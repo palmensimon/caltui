@@ -36,6 +36,8 @@ $ caltui next --json
 
 It looks up to 7 days ahead and skips all-day, cancelled and declined events. With `--json` it prints the full event plus `minutes_until`, or `null` when nothing is coming up. If a calendar fails to load and no meeting was found, it prints the error to stderr and exits 1.
 
+`caltui update` updates caltui to the latest version on GitHub. It runs the same `cargo install --git` command as the install step, so it needs `cargo` on your `$PATH`, and it only rebuilds when there are new commits.
+
 ## Configuration
 
 On first launch caltui will open the Settings screen. Press `?` for the setup guide.
