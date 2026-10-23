@@ -1,5 +1,7 @@
+use std::collections::HashSet;
+
 use anyhow::{Context, Result};
-use chrono::{DateTime, Local, NaiveDate, TimeZone};
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
 use icalendar::{CalendarComponent, CalendarDateTime, Component, DatePerhapsTime, EventLike};
 
 use crate::calendar::{extract_meeting_url, Attendee, CalendarEvent, CalendarSource, ResponseStatus};
@@ -46,6 +48,21 @@ pub fn parse_ics_text(text: &str, day: NaiveDate, source: CalendarSource) -> Res
         .earliest()
         .unwrap();
 
+    // Modified instances of a recurring meeting are separate VEVENTs sharing the
+    // master's UID, with a RECURRENCE-ID naming the occurrence they replace.
+    let overridden: HashSet<(String, DateTime<Local>)> = calendar
+        .components
+        .iter()
+        .filter_map(|c| match c {
+            CalendarComponent::Event(ev) => Some(ev),
+            _ => None,
+        })
+        .filter_map(|ev| {
+            let rid = ev.get_recurrence_id().and_then(to_local)?;
+            Some((ev.property_value("UID").unwrap_or("").to_string(), rid))
+        })
+        .collect();
+
     let mut events = Vec::new();
     for component in &calendar.components {
         let CalendarComponent::Event(ev) = component else { continue };
@@ -55,51 +72,148 @@ pub fn parse_ics_text(text: &str, day: NaiveDate, source: CalendarSource) -> Res
             .get_end()
             .and_then(to_local)
             .unwrap_or_else(|| start + chrono::Duration::hours(1));
+        let duration = end - start;
 
-        if start > day_end || end < day_start {
-            continue;
+        let starts = if ev.property_value("RRULE").is_some() && ev.get_recurrence_id().is_none() {
+            let uid = ev.property_value("UID").unwrap_or("").to_string();
+            expand_recurrence(ev, day_start - duration, day_end)
+                .unwrap_or_else(|| vec![start])
+                .into_iter()
+                .filter(|s| !overridden.contains(&(uid.clone(), *s)))
+                .collect()
+        } else {
+            vec![start]
+        };
+
+        for start in starts {
+            let end = start + duration;
+            if start > day_end || end < day_start {
+                continue;
+            }
+            events.push(build_event(ev, start, end, &source));
         }
-
-        let id = ev.property_value("UID").unwrap_or("").to_string();
-        let title = ev.get_summary().unwrap_or("(no title)").to_string();
-        let description = ev.get_description().map(|s| s.to_string());
-        let location = ev.get_location().map(|s| s.to_string());
-        let meeting_url = extract_meeting_url(description.as_deref().unwrap_or(""), None);
-        let event_url = ev.property_value("URL")
-            .or_else(|| ev.property_value("X-MICROSOFT-URL"))
-            .map(|s| s.to_string())
-            .or_else(|| match source {
-                CalendarSource::Microsoft => Some("https://outlook.office.com/calendar/".to_string()),
-                _ => None,
-            });
-        let is_all_day = matches!(ev.get_start(), Some(DatePerhapsTime::Date(_)));
-
-        let (attendees, response_status) = parse_attendees(ev);
-        let organizer = parse_organizer(ev);
-        let cancelled = ev.property_value("STATUS")
-            .map(|s| s.to_uppercase() == "CANCELLED")
-            .unwrap_or(false);
-
-        events.push(CalendarEvent {
-            id,
-            title,
-            start,
-            end,
-            description,
-            location,
-            meeting_url,
-            event_url,
-            source: source.clone(),
-            response_status,
-            organizer,
-            attendees,
-            is_all_day,
-            cancelled,
-        });
     }
 
     events.sort_by_key(|e| e.start);
     Ok(events)
+}
+
+fn build_event(
+    ev: &icalendar::Event,
+    start: DateTime<Local>,
+    end: DateTime<Local>,
+    source: &CalendarSource,
+) -> CalendarEvent {
+    let id = ev.property_value("UID").unwrap_or("").to_string();
+    let title = ev.get_summary().unwrap_or("(no title)").to_string();
+    let description = ev.get_description().map(|s| s.to_string());
+    let location = ev.get_location().map(|s| s.to_string());
+    let meeting_url = extract_meeting_url(description.as_deref().unwrap_or(""), None);
+    let event_url = ev.property_value("URL")
+        .or_else(|| ev.property_value("X-MICROSOFT-URL"))
+        .map(|s| s.to_string())
+        .or_else(|| match source {
+            CalendarSource::Microsoft => Some("https://outlook.office.com/calendar/".to_string()),
+            _ => None,
+        });
+    let is_all_day = matches!(ev.get_start(), Some(DatePerhapsTime::Date(_)));
+
+    let (attendees, response_status) = parse_attendees(ev);
+    let organizer = parse_organizer(ev);
+    let cancelled = ev.property_value("STATUS")
+        .map(|s| s.to_uppercase() == "CANCELLED")
+        .unwrap_or(false);
+
+    CalendarEvent {
+        id,
+        title,
+        start,
+        end,
+        description,
+        location,
+        meeting_url,
+        event_url,
+        source: source.clone(),
+        response_status,
+        organizer,
+        attendees,
+        is_all_day,
+        cancelled,
+    }
+}
+
+/// Occurrence start times of a recurring event (RRULE minus EXDATE) within
+/// `[from, to]`. Returns `None` if the rule can't be interpreted.
+fn expand_recurrence(
+    ev: &icalendar::Event,
+    from: DateTime<Local>,
+    to: DateTime<Local>,
+) -> Option<Vec<DateTime<Local>>> {
+    let dt_start = to_rrule_tz(ev.get_start()?)?;
+    let tz = dt_start.timezone();
+    let rule: rrule::RRule<rrule::Unvalidated> = ev.property_value("RRULE")?.parse().ok()?;
+    let mut set = rule.build(dt_start).ok()?;
+
+    let exdates = ev
+        .properties()
+        .get("EXDATE")
+        .into_iter()
+        .chain(ev.multi_properties().get("EXDATE").into_iter().flatten());
+    for prop in exdates {
+        let tzid = prop.params().get("TZID").map(|p| p.value().to_string());
+        for value in prop.value().split(',') {
+            let d = match (value.trim(), &tzid) {
+                (v, _) if v.ends_with('Z') => {
+                    let naive = NaiveDateTime::parse_from_str(v, "%Y%m%dT%H%M%SZ").ok()?;
+                    DatePerhapsTime::DateTime(CalendarDateTime::Utc(naive.and_utc()))
+                }
+                (v, _) if v.len() == 8 => {
+                    DatePerhapsTime::Date(NaiveDate::parse_from_str(v, "%Y%m%d").ok()?)
+                }
+                (v, tzid) => {
+                    let date_time = NaiveDateTime::parse_from_str(v, "%Y%m%dT%H%M%S").ok()?;
+                    match tzid {
+                        Some(tzid) => DatePerhapsTime::DateTime(CalendarDateTime::WithTimezone {
+                            date_time,
+                            tzid: tzid.clone(),
+                        }),
+                        None => DatePerhapsTime::DateTime(CalendarDateTime::Floating(date_time)),
+                    }
+                }
+            };
+            set = set.exdate(to_rrule_tz(d)?.with_timezone(&tz));
+        }
+    }
+
+    // `after`/`before` are exclusive, so widen by a second to keep boundary hits.
+    let one_sec = chrono::Duration::seconds(1);
+    let result = set
+        .after((from - one_sec).with_timezone(&tz))
+        .before((to + one_sec).with_timezone(&tz))
+        .all(u16::MAX);
+    Some(result.dates.iter().map(|d| d.with_timezone(&Local)).collect())
+}
+
+fn to_rrule_tz(d: DatePerhapsTime) -> Option<DateTime<rrule::Tz>> {
+    match d {
+        DatePerhapsTime::DateTime(CalendarDateTime::WithTimezone { date_time, tzid }) => {
+            let tz = rrule::Tz::from(resolve_tz(&tzid));
+            tz.from_local_datetime(&date_time).earliest()
+        }
+        DatePerhapsTime::DateTime(CalendarDateTime::Utc(utc)) => {
+            Some(utc.with_timezone(&rrule::Tz::UTC))
+        }
+        DatePerhapsTime::DateTime(CalendarDateTime::Floating(naive)) => {
+            rrule::Tz::LOCAL.from_local_datetime(&naive).earliest()
+        }
+        DatePerhapsTime::Date(date) => {
+            rrule::Tz::LOCAL.from_local_datetime(&date.and_hms_opt(0, 0, 0)?).earliest()
+        }
+    }
+}
+
+fn resolve_tz(tzid: &str) -> chrono_tz::Tz {
+    windows_to_iana(tzid).unwrap_or(tzid).parse().unwrap_or(chrono_tz::UTC)
 }
 
 pub fn to_local(d: DatePerhapsTime) -> Option<DateTime<Local>> {
@@ -108,9 +222,8 @@ pub fn to_local(d: DatePerhapsTime) -> Option<DateTime<Local>> {
             CalendarDateTime::Utc(utc) => utc.with_timezone(&Local),
             CalendarDateTime::Floating(naive) => Local.from_local_datetime(&naive).earliest()?,
             CalendarDateTime::WithTimezone { date_time, tzid } => {
-                let iana = windows_to_iana(&tzid).unwrap_or(tzid.as_str());
-                let tz: chrono_tz::Tz = iana.parse().unwrap_or(chrono_tz::UTC);
-                tz.from_local_datetime(&date_time)
+                resolve_tz(&tzid)
+                    .from_local_datetime(&date_time)
                     .earliest()?
                     .with_timezone(&Local)
             }
@@ -328,5 +441,58 @@ fn partstat_to_rsvp(s: &str) -> ResponseStatus {
         "DECLINED" => ResponseStatus::Declined,
         "TENTATIVE" => ResponseStatus::Tentative,
         _ => ResponseStatus::NeedsAction,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const RECURRING: &str = "BEGIN:VCALENDAR\r
+VERSION:2.0\r
+BEGIN:VEVENT\r
+UID:weekly\r
+SUMMARY:Weekly sync\r
+DTSTART;TZID=W. Europe Standard Time:20260105T100000\r
+DTEND;TZID=W. Europe Standard Time:20260105T103000\r
+RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO;WKST=MO\r
+EXDATE;TZID=W. Europe Standard Time:20260119T100000\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:weekly\r
+SUMMARY:Weekly sync (moved)\r
+RECURRENCE-ID;TZID=W. Europe Standard Time:20260126T100000\r
+DTSTART;TZID=W. Europe Standard Time:20260127T140000\r
+DTEND;TZID=W. Europe Standard Time:20260127T143000\r
+END:VEVENT\r
+END:VCALENDAR\r
+";
+
+    fn titles_on(y: i32, m: u32, d: u32) -> Vec<String> {
+        let day = NaiveDate::from_ymd_opt(y, m, d).unwrap();
+        parse_ics_text(RECURRING, day, CalendarSource::Microsoft)
+            .unwrap()
+            .into_iter()
+            .map(|e| e.title)
+            .collect()
+    }
+
+    #[test]
+    fn expands_weekly_rrule() {
+        assert_eq!(titles_on(2026, 1, 5), ["Weekly sync"]);
+        assert_eq!(titles_on(2026, 1, 12), ["Weekly sync"]);
+        assert_eq!(titles_on(2026, 3, 2), ["Weekly sync"]);
+        assert!(titles_on(2026, 1, 13).is_empty());
+    }
+
+    #[test]
+    fn honours_exdate() {
+        assert!(titles_on(2026, 1, 19).is_empty());
+    }
+
+    #[test]
+    fn override_replaces_occurrence() {
+        assert!(titles_on(2026, 1, 26).is_empty());
+        assert_eq!(titles_on(2026, 1, 27), ["Weekly sync (moved)"]);
     }
 }
